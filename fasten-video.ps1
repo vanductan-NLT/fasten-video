@@ -26,7 +26,7 @@ if ([string]::IsNullOrWhiteSpace($Path)) {
         (Join-Path $env:USERPROFILE 'Pictures\Camera Roll')
     ) | Select-Object -Unique
 
-    $videoExtensions = @('.mp4', '.mov', '.mkv', '.avi', '.m4v', '.wmv', '.flv', '.webm')
+    $videoExtensions = @('.mp4', '.mov', '.mkv', '.avi', '.m4v', '.wmv', '.flv', '.webm', '.3gp')
     $latest = $null
 
     foreach ($dir in $candidateDirs) {
@@ -42,7 +42,7 @@ if ([string]::IsNullOrWhiteSpace($Path)) {
     }
 
     if (-not $latest) {
-        throw "No video file found in Camera Roll (`"C:\Users\tan\OneDrive\Pictures\Camera Roll`")."
+        throw "No video file found in Camera Roll directory."
     }
     $Path = $latest.FullName
     Write-Host "Auto-detected video: $Path"
@@ -64,13 +64,25 @@ $baseName = [System.IO.Path]::GetFileNameWithoutExtension($input)
 $downloads = Join-Path $env:USERPROFILE 'Downloads'
 $output = Join-Path $downloads ("{0}-fast.mp4" -f $baseName)
 
-Write-Host "Input    : $input"
-Write-Host "Duration : $([Math]::Round($duration, 1))s"
-Write-Host "Speed    : ${speedStr}x"
-Write-Host "Output   : $output"
+$sourceDate = (Get-Item -LiteralPath $input).LastWriteTime
+$stampRaw = $sourceDate.ToString("dd MMM yyyy 'at' HH:mm:ss", [System.Globalization.CultureInfo]::InvariantCulture)
+$epoch = [DateTimeOffset]$sourceDate
+$epochSeconds = $epoch.ToUnixTimeSeconds()
 
-& $ffmpeg -y -i $input -an -vf "setpts=PTS/$speedStr" `
-    -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -movflags +faststart `
+$fontFile = 'C\:/Windows/Fonts/arial.ttf'
+$dynamicTimestamp = "%{pts\:localtime\:$epochSeconds}"
+$drawtext = "drawtext=fontfile='$fontFile':text='$dynamicTimestamp':fontcolor=white:fontsize=h/30:borderw=2:bordercolor=black@0.6:x=w-text_w-20:y=20"
+
+$vf = "$drawtext,setpts=PTS/$speedStr"
+
+Write-Host "Input     : $input"
+Write-Host "Duration  : $([Math]::Round($duration, 1))s"
+Write-Host "Speed     : ${speedStr}x"
+Write-Host "Timestamp : $stampRaw"
+Write-Host "Output    : $output"
+
+& $ffmpeg -y -i $input -an -vf $vf `
+    -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -movflags +faststart -f mp4 `
     -- $output
 
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg failed (exit $LASTEXITCODE). Original kept." }
