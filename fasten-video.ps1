@@ -20,19 +20,29 @@ $ffmpeg  = Resolve-Tool 'ffmpeg'  'C:\ffmpeg\bin\ffmpeg.exe'
 $ffprobe = Resolve-Tool 'ffprobe' 'C:\ffmpeg\bin\ffprobe.exe'
 
 if ([string]::IsNullOrWhiteSpace($Path)) {
-    $defaultDir = Join-Path $env:USERPROFILE 'OneDrive\Pictures\Camera Roll'
-    if (-not (Test-Path -LiteralPath $defaultDir)) {
-        throw "Default camera roll directory not found: $defaultDir"
-    }
+    $candidateDirs = @(
+        (Join-Path $env:USERPROFILE 'OneDrive\Pictures\Camera Roll'),
+        (Join-Path ([System.Environment]::GetFolderPath('MyPictures')) 'Camera Roll'),
+        (Join-Path $env:USERPROFILE 'Pictures\Camera Roll')
+    ) | Select-Object -Unique
 
     $videoExtensions = @('.mp4', '.mov', '.mkv', '.avi', '.m4v', '.wmv', '.flv', '.webm')
-    $latest = Get-ChildItem -LiteralPath $defaultDir -File |
-        Where-Object { $videoExtensions -contains $_.Extension.ToLower() } |
-        Sort-Object LastWriteTime -Descending |
-        Select-Object -First 1
+    $latest = $null
+
+    foreach ($dir in $candidateDirs) {
+        if (Test-Path -LiteralPath $dir) {
+            $found = Get-ChildItem -LiteralPath $dir -File |
+                Where-Object { $videoExtensions -contains $_.Extension.ToLower() } |
+                Sort-Object LastWriteTime -Descending |
+                Select-Object -First 1
+            if ($found -and (-not $latest -or $found.LastWriteTime -gt $latest.LastWriteTime)) {
+                $latest = $found
+            }
+        }
+    }
 
     if (-not $latest) {
-        throw "No video file found in $defaultDir"
+        throw "No video file found in Camera Roll (`"C:\Users\tan\OneDrive\Pictures\Camera Roll`")."
     }
     $Path = $latest.FullName
     Write-Host "Auto-detected video: $Path"
