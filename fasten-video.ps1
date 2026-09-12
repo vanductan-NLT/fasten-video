@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true, Position = 0)]
+    [Parameter(Mandatory = $false, Position = 0)]
     [string]$Path,
 
     [int]$MaxSeconds = 120
@@ -18,6 +18,25 @@ function Resolve-Tool {
 
 $ffmpeg  = Resolve-Tool 'ffmpeg'  'C:\ffmpeg\bin\ffmpeg.exe'
 $ffprobe = Resolve-Tool 'ffprobe' 'C:\ffmpeg\bin\ffprobe.exe'
+
+if ([string]::IsNullOrWhiteSpace($Path)) {
+    $defaultDir = Join-Path $env:USERPROFILE 'OneDrive\Pictures\Camera Roll'
+    if (-not (Test-Path -LiteralPath $defaultDir)) {
+        throw "Default camera roll directory not found: $defaultDir"
+    }
+
+    $videoExtensions = @('.mp4', '.mov', '.mkv', '.avi', '.m4v', '.wmv', '.flv', '.webm')
+    $latest = Get-ChildItem -LiteralPath $defaultDir -File |
+        Where-Object { $videoExtensions -contains $_.Extension.ToLower() } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+
+    if (-not $latest) {
+        throw "No video file found in $defaultDir"
+    }
+    $Path = $latest.FullName
+    Write-Host "Auto-detected video: $Path"
+}
 
 if (-not (Test-Path -LiteralPath $Path)) {
     throw "Input not found: $Path"
